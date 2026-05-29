@@ -30,7 +30,6 @@ jobs:
           filters: |
             contracts:
               - 'contracts/**'
-              - 'scripts/**'
               - 'contracts/earn-quest/Cargo.lock'
             frontend:
               - 'FrontEnd/my-app/package.json'
