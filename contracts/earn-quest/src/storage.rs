@@ -12,6 +12,9 @@ use soroban_sdk::{contracttype, Address, Env, Symbol, Vec, String};
 ///
 /// This enum defines all possible keys used to store data in the contract's instance storage.
 /// Each variant represents a different type of data with its associated key structure.
+///
+/// **Upgrade safety:** never rename or reuse variants. Add new variants only at the end.
+/// See `docs/STORAGE_LAYOUT.md` for the full layout map and naming conventions.
 #[contracttype]
 pub enum DataKey {
     /// Stores individual Quest data, keyed by quest ID (Symbol)
@@ -1342,4 +1345,154 @@ pub fn remove_creator_whitelist(env: &Env, address: &Address) {
     env.storage()
         .instance()
         .remove(&DataKey::CreatorWhitelist(address.clone()));
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+    use core::mem;
+    use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env, Vec};
+
+    /// Canonical variant names — keep in sync with `DataKey` and `docs/STORAGE_LAYOUT.md`.
+    const VARIANT_NAMES: &[&str] = &[
+        "Quest",
+        "QuestMetadata",
+        "QuestMetadataExt",
+        "Submission",
+        "UserStats",
+        "UserBadges",
+        "Admin",
+        "Role",
+        "ContractAdmin",
+        "ContractVersion",
+        "ContractConfig",
+        "Initialized",
+        "Paused",
+        "UnpauseApproval",
+        "UnpauseThreshold",
+        "UnpauseRound",
+        "UnpauseApprovalCount",
+        "UnpauseTimelockSeconds",
+        "ScheduledUnpauseTime",
+        "Escrow",
+        "EscrowMeta",
+        "QuestIds",
+        "PlatformStats",
+        "PlatformQuestsCreated",
+        "PlatformSubmissions",
+        "PlatformRewardsDistributed",
+        "PlatformActiveUsers",
+        "PlatformRewardsClaimed",
+        "CreatorStats",
+        "OracleConfig",
+        "OracleAddresses",
+        "ReentrancyGuard",
+        "Dispute",
+        "Commitment",
+        "VerifierStake",
+        "Balance",
+        "Allowance",
+        "TokenName",
+        "TokenSymbol",
+        "TokenDecimals",
+        "BadgeType",
+        "BadgeTypeIds",
+        "MinCreatorLevel",
+        "CreatorWhitelist",
+    ];
+
+    const EXPECTED_VARIANT_COUNT: usize = 44;
+
+    /// One sample instance per `DataKey` variant for layout audits.
+    fn all_data_keys(env: &Env) -> Vec<DataKey> {
+        let addr = Address::generate(env);
+        let addr2 = Address::generate(env);
+        let quest_id = symbol_short!("Q1");
+        let badge_id = symbol_short!("BDG");
+        let mut keys = Vec::new(env);
+        keys.push_back(DataKey::Quest(quest_id.clone()));
+        keys.push_back(DataKey::QuestMetadata(quest_id.clone()));
+        keys.push_back(DataKey::QuestMetadataExt(quest_id.clone()));
+        keys.push_back(DataKey::Submission(quest_id.clone(), addr.clone()));
+        keys.push_back(DataKey::UserStats(addr.clone()));
+        keys.push_back(DataKey::UserBadges(addr.clone()));
+        keys.push_back(DataKey::Admin(addr.clone()));
+        keys.push_back(DataKey::Role(Role::Admin, addr.clone()));
+        keys.push_back(DataKey::ContractAdmin);
+        keys.push_back(DataKey::ContractVersion);
+        keys.push_back(DataKey::ContractConfig);
+        keys.push_back(DataKey::Initialized);
+        keys.push_back(DataKey::Paused);
+        keys.push_back(DataKey::UnpauseApproval(1, addr.clone()));
+        keys.push_back(DataKey::UnpauseThreshold);
+        keys.push_back(DataKey::UnpauseRound);
+        keys.push_back(DataKey::UnpauseApprovalCount);
+        keys.push_back(DataKey::UnpauseTimelockSeconds);
+        keys.push_back(DataKey::ScheduledUnpauseTime);
+        keys.push_back(DataKey::Escrow(quest_id.clone()));
+        keys.push_back(DataKey::EscrowMeta(quest_id.clone()));
+        keys.push_back(DataKey::QuestIds);
+        keys.push_back(DataKey::PlatformStats);
+        keys.push_back(DataKey::PlatformQuestsCreated);
+        keys.push_back(DataKey::PlatformSubmissions);
+        keys.push_back(DataKey::PlatformRewardsDistributed);
+        keys.push_back(DataKey::PlatformActiveUsers);
+        keys.push_back(DataKey::PlatformRewardsClaimed);
+        keys.push_back(DataKey::CreatorStats(addr.clone()));
+        keys.push_back(DataKey::OracleConfig(addr.clone()));
+        keys.push_back(DataKey::OracleAddresses);
+        keys.push_back(DataKey::ReentrancyGuard);
+        keys.push_back(DataKey::Dispute(quest_id.clone(), addr.clone()));
+        keys.push_back(DataKey::Commitment(quest_id.clone(), addr.clone()));
+        keys.push_back(DataKey::VerifierStake(quest_id.clone(), addr.clone()));
+        keys.push_back(DataKey::Balance(addr.clone()));
+        keys.push_back(DataKey::Allowance(addr.clone(), addr2.clone()));
+        keys.push_back(DataKey::TokenName);
+        keys.push_back(DataKey::TokenSymbol);
+        keys.push_back(DataKey::TokenDecimals);
+        keys.push_back(DataKey::BadgeType(badge_id.clone()));
+        keys.push_back(DataKey::BadgeTypeIds);
+        keys.push_back(DataKey::MinCreatorLevel);
+        keys.push_back(DataKey::CreatorWhitelist(addr.clone()));
+        keys
+    }
+
+    #[test]
+    fn data_key_variant_names_are_unique() {
+        for i in 0..VARIANT_NAMES.len() {
+            for j in (i + 1)..VARIANT_NAMES.len() {
+                assert_ne!(
+                    VARIANT_NAMES[i],
+                    VARIANT_NAMES[j],
+                    "duplicate DataKey variant name: {}",
+                    VARIANT_NAMES[i]
+                );
+            }
+        }
+        assert_eq!(VARIANT_NAMES.len(), EXPECTED_VARIANT_COUNT);
+    }
+
+    #[test]
+    fn data_key_discriminants_are_unique() {
+        let env = Env::default();
+        let keys = all_data_keys(&env);
+        assert_eq!(keys.len() as usize, EXPECTED_VARIANT_COUNT);
+
+        for i in 0..keys.len() {
+            for j in (i + 1)..keys.len() {
+                assert_ne!(
+                    mem::discriminant(&keys.get(i).unwrap()),
+                    mem::discriminant(&keys.get(j).unwrap()),
+                    "duplicate DataKey discriminant between indices {i} and {j}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn data_key_variant_count_matches_documentation() {
+        let env = Env::default();
+        assert_eq!(all_data_keys(&env).len() as usize, VARIANT_NAMES.len());
+        assert_eq!(VARIANT_NAMES.len(), EXPECTED_VARIANT_COUNT);
+    }
 }
