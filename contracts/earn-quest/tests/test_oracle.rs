@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::testutils::Ledger as _;
@@ -21,6 +22,7 @@ pub enum MockOracleState {
 #[contract]
 pub struct MockPriceFeedOracle;
 
+#[allow(clippy::too_many_arguments)]
 #[contractimpl]
 impl MockPriceFeedOracle {
     pub fn set_price_data(
@@ -143,7 +145,7 @@ fn test_oracle_admin_operations() {
 
     let configs = client.get_oracle_configs();
     assert_eq!(configs.len(), 1);
-    assert_eq!(configs.get(0).unwrap().is_active, false);
+    assert!(!configs.get(0).unwrap().is_active);
 
     // Remove oracle config
     client.remove_oracle(&admin, &oracle_addr);
